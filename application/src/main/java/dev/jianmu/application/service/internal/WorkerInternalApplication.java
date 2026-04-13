@@ -585,7 +585,7 @@ public class WorkerInternalApplication {
             log.error("pullSecret序列化失败，" + e);
         }
         return WorkerSecret.builder()
-                .env("PULLSECRET")
+                .env("pullsecret")
                 .data(data)
                 .mask(true)
                 .build();
