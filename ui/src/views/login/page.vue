@@ -5,13 +5,33 @@
         <router-link :to="{ name: 'index' }">
           <div class="icon"></div>
         </router-link>
-        <!--      <div class="separator"></div>-->
-        <!--      <div class="desc">-->
-        <!--        <div class="title">自动化集成平台</div>-->
-        <!--        <div class="subtitle">Automation Integration Platform</div>-->
-        <!--      </div>-->
       </div>
-      <login :code="code" :error_description="error_description" :gitRepo="gitRepo" :gitRepoOwner="gitRepoOwner"/>
+      
+      <!-- 登录表单 -->
+      <login 
+        v-if="!showRegister && !showChangePassword" 
+        :code="code" 
+        :error_description="error_description" 
+        :gitRepo="gitRepo" 
+        :gitRepoOwner="gitRepoOwner"
+        @switch-to-register="showRegister = true"
+      />
+      
+      <!-- 注册表单 -->
+      <register 
+        v-if="showRegister" 
+        @close="showRegister = false" 
+        @switch-to-login="showRegister = false"
+        @success="handleRegisterSuccess"
+      />
+      
+      <!-- 修改密码表单 -->
+      <change-password
+        v-if="showChangePassword"
+        @close="showChangePassword = false"
+        @success="handleChangePasswordSuccess"
+      />
+      
       <bottom-nav/>
     </div>
   </div>
@@ -21,11 +41,13 @@
 import { defineComponent, ref } from 'vue';
 import BottomNav from '@/views/nav/bottom.vue';
 import Login from '@/views/common/login.vue';
+import Register from '@/views/login/register.vue';
+import ChangePassword from '@/views/login/change-password.vue';
 import { useRoute } from 'vue-router';
-import { AUTHORIZE_INDEX } from '@/router/path-def';
+import { AUTHORIZE_INDEX, LOGIN_INDEX } from '@/router/path-def';
 
 export default defineComponent({
-  components: { BottomNav, Login },
+  components: { BottomNav, Login, Register, ChangePassword },
   props: {
     gitRepo: String,
     gitRepoOwner: String,
@@ -35,8 +57,23 @@ export default defineComponent({
   setup() {
     const route = useRoute();
     const isAuthorize = ref<boolean>(route.path === AUTHORIZE_INDEX);
+    const showRegister = ref<boolean>(false);
+    const showChangePassword = ref<boolean>(false);
+
+    const handleRegisterSuccess = () => {
+      showRegister.value = false;
+    };
+
+    const handleChangePasswordSuccess = () => {
+      showChangePassword.value = false;
+    };
+
     return {
       isAuthorize,
+      showRegister,
+      showChangePassword,
+      handleRegisterSuccess,
+      handleChangePasswordSuccess,
     };
   },
 });
@@ -63,29 +100,6 @@ export default defineComponent({
       background-size: contain;
       background-position: center center;
     }
-
-    //.separator {
-    //  width: 1px;
-    //  height: 28px;
-    //  background-color: #B9CFE6;
-    //  border-radius: 1px;
-    //  overflow: hidden;
-    //}
-    //
-    //.desc {
-    //  .title {
-    //    font-size: 24px;
-    //    font-weight: bold;
-    //    color: #082340;
-    //    letter-spacing: 1px;
-    //  }
-    //
-    //  .subtitle {
-    //    white-space: nowrap;
-    //    font-size: 12px;
-    //    color: #082340;
-    //  }
-    //}
   }
 
   ::v-deep(.login) {

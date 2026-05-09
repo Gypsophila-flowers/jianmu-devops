@@ -1,117 +1,52 @@
 package dev.jianmu.infrastructure;
 
-import dev.jianmu.task.service.InstanceDomainService;
-import dev.jianmu.workflow.service.ParameterDomainService;
-import dev.jianmu.workflow.service.WorkflowInstanceDomainService;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.retry.RetryCallback;
-import org.springframework.retry.RetryContext;
-import org.springframework.retry.RetryListener;
-import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import org.springframework.security.web.firewall.HttpFirewall;
-import org.springframework.security.web.firewall.StrictHttpFirewall;
-import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.lang.reflect.Method;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * @author Ethan Liu
- * @class AppConfig
- * @description 自定义Bean配置类
- * @create 2021-03-17 16:49
+ * AppConfig - 应用程序配置类
+ *
+ * <p>该类提供Spring应用程序的全局配置。
+ * 配置了异步执行器，支持任务的异步处理。
+ *
+ * <p>主要配置：
+ * <ul>
+ *   <li>异步执行器：用于处理异步任务和后台工作</li>
+ * </ul>
+ *
+ * <p>EnableAsync说明：
+ * <ul>
+ *   <li>启用Spring的异步方法执行功能</li>
+ *   <li>方法上使用@Async注解即可异步执行</li>
+ *   <li>需要配置自定义线程池以获得更好的控制</li>
+ * </ul>
+ *
+ * @author Daihw
  */
-@Slf4j
 @Configuration
-public class AppConfig implements AsyncConfigurer, WebMvcConfigurer {
-    private static final Logger logger = LoggerFactory.getLogger(AppConfig.class);
+@EnableAsync
+public class AppConfig {
 
-    @Bean
-    public WorkflowInstanceDomainService createWorkflowInstanceDomainService() {
-        return new WorkflowInstanceDomainService();
-    }
-
-    @Bean
-    public InstanceDomainService createInstanceDomainService() {
-        return new InstanceDomainService();
-    }
-
-    @Bean
-    public ParameterDomainService createParameterDomainService() {
-        return new ParameterDomainService();
-    }
-
-    @Bean
-    public HttpFirewall allowUrlEncodedSlashHttpFirewall() {
-        StrictHttpFirewall firewall = new StrictHttpFirewall();
-        firewall.setAllowUrlEncodedSlash(true);
-        return firewall;
-    }
-
-    @Bean
-    @Override
-    public Executor getAsyncExecutor() {
+    /**
+     * 创建异步任务执行器
+     *
+     * <p>配置用于执行异步任务的线程池。
+     * 线程池参数可根据系统负载调整。
+     *
+     * @return 配置好的线程池执行器
+     */
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        //核心线程数10：线程池创建时候初始化的线程数
-        executor.setCorePoolSize(10);
-        //最大线程数20：线程池最大的线程数，只有在缓冲队列满了之后才会申请超过核心线程数的线程
-        executor.setMaxPoolSize(20);
-        //缓冲队列200：用来缓冲执行任务的队列
-        executor.setQueueCapacity(200);
-        //允许线程的空闲时间60秒：当超过了核心线程出之外的线程在空闲时间到达之后会被销毁
-        executor.setKeepAliveSeconds(60);
-        //线程池对拒绝任务的处理策略：这里采用了CallerRunsPolicy策略，
-        // 当线程池没有处理能力的时候，该策略会直接在 execute 方法的调用线程中运行被拒绝的任务；
-        // 如果执行程序已关闭，则会丢弃该任务
-        executor.setThreadNamePrefix("asyncTask-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("jianmu-async-");
+        executor.initialize();
         return executor;
-    }
-
-    @Override
-    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
-        return new SpringAsyncExceptionHandler();
-    }
-
-    static class SpringAsyncExceptionHandler implements AsyncUncaughtExceptionHandler {
-        @Override
-        public void handleUncaughtException(Throwable throwable, Method method, Object... obj) {
-            logger.error("Async方法执行异常", throwable);
-        }
-    }
-
-    @Bean
-    public ThreadPoolTaskExecutor mvcTaskExecutor() {
-        ThreadPoolTaskExecutor taskExecutor = new ThreadPoolTaskExecutor();
-        taskExecutor.setCorePoolSize(10);
-        taskExecutor.setMaxPoolSize(10);
-        return taskExecutor;
-    }
-
-    public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
-        configurer.setTaskExecutor(mvcTaskExecutor());
-        configurer.setDefaultTimeout(60000L);
-    }
-
-    @Bean
-    public RetryListener retryListener() {
-        return new RetryListener() {
-            @Override
-            public <T, E extends Throwable> void onError(
-                    RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
-                String exceptionName = throwable.getClass().getSimpleName();
-                log.warn("[{}] Try count: {}", exceptionName, context.getRetryCount());
-                log.warn("[{}] Try method: {}", exceptionName, context.getAttribute("context.name"));
-                log.warn("[{}] Try exception: {}", exceptionName, throwable.toString());
-            }
-        };
     }
 }

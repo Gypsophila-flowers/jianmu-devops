@@ -12,16 +12,72 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
+ * 工作流领域服务
+ *
+ * <p>WorkflowDomainService是工作流系统中处理工作流执行逻辑的领域服务类，
+ * 负责判断节点是否可以激活、是否可以跳过等核心业务逻辑。
+ * 这些判断涉及复杂的流程控制，包括串行、并行、汇聚、环路等场景。</p>
+ *
+ * <p>主要功能：
+ * <ul>
+ *   <li>canActivateNode - 判断节点是否可以激活</li>
+ *   <li>hasSameSerialNo - 检查上游节点的执行次数是否一致</li>
+ *   <li>canSkipNode - 判断节点是否可以跳过</li>
+ * </ul>
+ * </p>
+ *
+ * <p>设计原则：
+ * <ul>
+ *   <li>处理复杂的流程控制逻辑</li>
+ *   <li>支持串行和并行执行</li>
+ *   <li>支持汇聚和网关</li>
+ *   <li>支持环路（循环）处理</li>
+ * </ul>
+ * </p>
+ *
  * @author Ethan Liu
- * @class WorkflowDomainService
- * @description WorkflowDomainService
  * @create 2022-03-08 21:31
+ * @see Workflow
+ * @see AsyncTaskInstance
  */
 public class WorkflowDomainService {
+    
+    /**
+     * 日志记录器
+     *
+     * <p>用于记录工作流领域服务的日志信息。</p>
+     */
     private static final Logger logger = LoggerFactory.getLogger(WorkflowDomainService.class);
 
+    /**
+     * 判断节点是否可以激活
+     *
+     * <p>根据工作流的拓扑结构和任务实例状态，
+     * 判断指定节点是否可以激活执行。</p>
+     *
+     * <p>判断逻辑：
+     * <ul>
+     *   <li>对于非Start节点：检查所有上游任务是否已完成</li>
+     *   <li>对于Start节点：直接返回true</li>
+     *   <li>对于环路节点：检查是否满足再次执行的条件</li>
+     *   <li>对于并行分支：检查所有上游是否都完成</li>
+     * </ul>
+     * </p>
+     *
+     * <p>版本控制：
+     * <ul>
+     *   <li>非环路：当前节点版本 >= 发送者版本时不能激活</li>
+     *   <li>环路：当前节点版本 > 发送者版本时不能激活</li>
+     * </ul>
+     * </p>
+     *
+     * @param nodeRef 要激活的节点引用
+     * @param sender 发送事件的节点引用
+     * @param workflow 工作流定义
+     * @param asyncTaskInstances 任务实例列表
+     * @return 如果节点可以激活返回true，否则返回false
+     */
     public boolean canActivateNode(String nodeRef, String sender, Workflow workflow, List<AsyncTaskInstance> asyncTaskInstances) {
-        // 返回当前节点上游Task的ref List
         var node = workflow.findNode(nodeRef);
         var senderNode = workflow.findNode(sender);
         if (!(senderNode instanceof Start)) {
@@ -89,6 +145,25 @@ public class WorkflowDomainService {
         return true;
     }
 
+    /**
+     * 检查上游节点的执行次数是否一致
+     *
+     * <p>用于判断工作流是否可以跳过当前节点。
+     * 如果上游节点的执行次数（serialNo）都相同，
+     * 则可以安全地跳过当前节点。</p>
+     *
+     * <p>使用场景：
+     * <ul>
+     *   <li>判断是否需要进行汇聚等待</li>
+     *   <li>判断是否可以跳过节点</li>
+     * </ul>
+     * </p>
+     *
+     * @param nodeRef 节点引用
+     * @param workflow 工作流定义
+     * @param asyncTaskInstances 任务实例列表
+     * @return 如果上游节点的执行次数都相同返回true
+     */
     public boolean hasSameSerialNo(String nodeRef, Workflow workflow, List<AsyncTaskInstance> asyncTaskInstances) {
         List<String> refList = workflow.findNodes(nodeRef);
         List<String> instanceList = asyncTaskInstances.stream()
@@ -107,6 +182,26 @@ public class WorkflowDomainService {
         return sets <= 1;
     }
 
+    /**
+     * 判断节点是否可以跳过
+     *
+     * <p>根据工作流的拓扑结构和任务实例状态，
+     * 判断指定节点是否可以跳过执行。</p>
+     *
+     * <p>判断逻辑：
+     * <ul>
+     *   <li>检查上游节点的执行次数是否一致</li>
+     *   <li>对于存在环路的场景，检查环路条件</li>
+     *   <li>检查所有上游节点是否都已跳过</li>
+     * </ul>
+     * </p>
+     *
+     * @param nodeRef 要跳过的节点引用
+     * @param sender 发送事件的节点引用
+     * @param workflow 工作流定义
+     * @param asyncTaskInstances 任务实例列表
+     * @return 如果节点可以跳过返回true，否则返回false
+     */
     public boolean canSkipNode(String nodeRef, String sender, Workflow workflow, List<AsyncTaskInstance> asyncTaskInstances) {
         // 返回当前节点上游Task的ref List
         var node = workflow.findNode(nodeRef);

@@ -33,22 +33,66 @@ import org.springframework.web.context.request.async.DeferredResult;
 import java.io.IOException;
 
 /**
+ * Worker节点API接口
+ *
+ * <p>该控制器为Worker节点提供与服务器通信的API接口，包括：
+ * <ul>
+ *   <li>Worker注册与注销 - Worker节点加入/离开集群</li>
+ *   <li>任务拉取 - Worker从服务器拉取待执行任务</li>
+ *   <li>任务状态更新 - Worker更新任务执行状态和结果</li>
+ *   <li>日志写入 - Worker上传任务执行日志</li>
+ *   <li>任务终止监听 - 监听服务器终止任务指令</li>
+ * </ul>
+ *
+ * <p><b>认证机制：</b>
+ * <ul>
+ *   <li>所有接口需要通过X-Jianmu-Token请求头进行认证</li>
+ *   <li>Token在Worker注册时由服务器分配</li>
+ * </ul>
+ *
+ * <p><b>任务类型：</b>
+ * <ul>
+ *   <li>TASK - 普通执行任务</li>
+ *   <li>VOLUME - 卷管理任务（创建/删除存储卷）</li>
+ * </ul>
+ *
  * @author Ethan Liu
- * @class WorkerController
- * @description Worker API
+ * @class WorkerApi
+ * @description Worker节点API，为Worker提供注册、任务拉取、状态更新等功能
  * @create 2021-04-21 14:40
  */
 @RestController
 @RequestMapping("workers")
-@Tag(name = "Worker API", description = "为Worker提供的API")
+@Tag(name = "Worker API", description = "Worker节点API，为Worker提供与服务器通信的接口")
 public class WorkerApi {
+    /**
+     * Worker内部应用服务，处理Worker相关业务逻辑
+     */
     private final WorkerInternalApplication workerApplication;
+    /**
+     * 延迟结果服务，用于长轮询和SSE推送
+     */
     private final DeferredResultService deferredResultService;
+    /**
+     * 节点定义查询接口
+     */
     private final NodeDefApi nodeDefApi;
+    /**
+     * 存储服务，用于日志写入和读取
+     */
     private final StorageService storageService;
+    /**
+     * 任务实例应用服务
+     */
     private final TaskInstanceApplication taskInstanceApplication;
+    /**
+     * 全局配置属性
+     */
     private final GlobalProperties globalProperties;
 
+    /**
+     * 构造函数，注入所需的依赖服务
+     */
     public WorkerApi(WorkerInternalApplication workerApplication,
                      DeferredResultService deferredResultService,
                      NodeDefApi nodeDefApi,
@@ -64,8 +108,23 @@ public class WorkerApi {
         this.globalProperties = globalProperties;
     }
 
+    /**
+     * Worker注册接口
+     *
+     * <p>Worker节点向服务器注册，加入任务执行集群。
+     *
+     * <p><b>请求信息：</b>
+     * <ul>
+     *   <li>请求方法：PUT</li>
+     *   <li>请求路径：/workers/{workerId}/join</li>
+     *   <li>Header: X-Jianmu-Token</li>
+     * </ul>
+     *
+     * @param workerId Worker唯一标识符
+     * @param dto Worker注册信息
+     */
     @PutMapping("{workerId}/join")
-    @Operation(summary = "Worker注册接口", description = "Worker注册接口")
+    @Operation(summary = "Worker注册", description = "Worker节点向服务器注册")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -82,8 +141,22 @@ public class WorkerApi {
         this.workerApplication.join(worker);
     }
 
+    /**
+     * Worker上线通知
+     *
+     * <p>通知服务器Worker已上线，可以接收任务。
+     *
+     * <p><b>请求信息：</b>
+     * <ul>
+     *   <li>请求方法：PATCH</li>
+     *   <li>请求路径：/workers/{workerId}/online</li>
+     *   <li>Header: X-Jianmu-Token</li>
+     * </ul>
+     *
+     * @param workerId Worker唯一标识符
+     */
     @PatchMapping("{workerId}/online")
-    @Operation(summary = "通知Worker已经Online", description = "通知Worker已经Online")
+    @Operation(summary = "Worker上线", description = "通知Worker已经上线")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -91,8 +164,22 @@ public class WorkerApi {
         this.workerApplication.online(workerId);
     }
 
+    /**
+     * Worker下线通知
+     *
+     * <p>通知服务器Worker已下线，不再接收新任务。
+     *
+     * <p><b>请求信息：</b>
+     * <ul>
+     *   <li>请求方法：PATCH</li>
+     *   <li>请求路径：/workers/{workerId}/offline</li>
+     *   <li>Header: X-Jianmu-Token</li>
+     * </ul>
+     *
+     * @param workerId Worker唯一标识符
+     */
     @PatchMapping("{workerId}/offline")
-    @Operation(summary = "通知Worker已经Offline", description = "通知Worker已经Offline")
+    @Operation(summary = "Worker下线", description = "通知Worker已经下线")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -100,17 +187,40 @@ public class WorkerApi {
         this.workerApplication.offline(workerId);
     }
 
-
+    /**
+     * Ping接口
+     *
+     * <p>Worker定期ping服务器以保持连接。
+     *
+     * <p><b>请求信息：</b>
+     * <ul>
+     *   <li>请求方法：GET</li>
+     *   <li>请求路径：/workers/{workerId}/ping</li>
+     *   <li>Header: X-Jianmu-Token</li>
+     * </ul>
+     *
+     * @param workerId Worker唯一标识符
+     */
     @GetMapping("{workerId}/ping")
-    @Operation(summary = "ping Server接口", description = "ping Server接口")
+    @Operation(summary = "Ping服务器", description = "Worker保持连接的ping接口")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
     public void ping(@PathVariable("workerId") String workerId) {
     }
 
+    /**
+     * Kubernetes Worker拉取任务接口
+     *
+     * <p>K8s环境下的Worker拉取指定触发器的任务。
+     * 使用延迟结果实现长轮询。
+     *
+     * @param workerId Worker唯一标识符
+     * @param taskPullingDto 任务拉取参数
+     * @return DeferredResult<ResponseEntity<?>> 延迟结果
+     */
     @GetMapping("kubernetes/{workerId}/tasks")
-    @Operation(summary = "拉取kube任务接口", description = "拉取kube任务接口")
+    @Operation(summary = "K8s拉取任务", description = "Kubernetes Worker拉取任务")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -123,8 +233,23 @@ public class WorkerApi {
         return deferredResult;
     }
 
+    /**
+     * 标准Worker拉取任务接口
+     *
+     * <p>Worker从服务器拉取待执行任务。
+     * 使用延迟结果实现长轮询，无任务时请求会阻塞直到有任务或超时。
+     *
+     * <p><b>任务类型：</b>
+     * <ul>
+     *   <li>TASK - 普通任务，包含容器规格和镜像拉取策略</li>
+     *   <li>VOLUME - 卷任务，用于创建或删除存储卷</li>
+     * </ul>
+     *
+     * @param workerId Worker唯一标识符
+     * @return DeferredResult<ResponseEntity<?>> 延迟结果
+     */
     @GetMapping("{workerId}/tasks")
-    @Operation(summary = "拉取任务接口", description = "拉取任务接口")
+    @Operation(summary = "拉取任务", description = "Worker从服务器拉取待执行任务")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -163,8 +288,17 @@ public class WorkerApi {
         return deferredResult;
     }
 
+    /**
+     * 获取任务详情接口
+     *
+     * <p>根据任务业务ID获取任务的详细信息。
+     *
+     * @param workerId Worker唯一标识符
+     * @param businessId 任务业务ID
+     * @return WorkerTaskVo 任务详情
+     */
     @GetMapping("{workerId}/tasks/{businessId}")
-    @Operation(summary = "获取任务详情接口", description = "获取任务详情接口")
+    @Operation(summary = "获取任务详情", description = "根据业务ID获取任务详情")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -195,6 +329,13 @@ public class WorkerApi {
         }
     }
 
+    /**
+     * 获取任务认证信息
+     *
+     * <p>构建任务执行所需的认证信息，包括镜像仓库地址和凭证。
+     *
+     * @return Auth 认证信息
+     */
     private Auth getTaskAuth() {
         var registry = globalProperties.getWorker().getRegistry();
         return Auth.builder()
@@ -204,8 +345,18 @@ public class WorkerApi {
                 .build();
     }
 
+    /**
+     * 监听任务终止接口
+     *
+     * <p>Worker持续监听服务器下发的任务终止指令。
+     * 使用延迟结果实现长轮询，当服务器要求终止任务时立即返回。
+     *
+     * @param workerId Worker唯一标识符
+     * @param businessId 任务业务ID
+     * @return DeferredResult<ResponseEntity<?>> 延迟结果
+     */
     @PostMapping("{workerId}/tasks/{businessId}")
-    @Operation(summary = "获取终止任务接口", description = "获取终止任务接口")
+    @Operation(summary = "监听任务终止", description = "监听服务器终止任务指令")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -222,6 +373,18 @@ public class WorkerApi {
         return deferredResult;
     }
 
+    /**
+     * 确认任务接口
+     *
+     * <p>Worker确认接收任务，开始执行。
+     * 包含重试机制，处理死锁和锁获取失败的情况。
+     *
+     * @param response HTTP响应对象
+     * @param workerId Worker唯一标识符
+     * @param businessId 任务业务ID
+     * @param dto 任务确认参数
+     * @return WorkerTaskVo 任务详情
+     */
     @Retryable(
             value = {DeadlockLoserDataAccessException.class, CannotAcquireLockException.class},
             maxAttempts = 5,
@@ -229,7 +392,7 @@ public class WorkerApi {
             listeners = "retryListener"
     )
     @PatchMapping("{workerId}/tasks/{businessId}/accept")
-    @Operation(summary = "确定任务接口", description = "确定任务接口")
+    @Operation(summary = "确认任务", description = "Worker确认接收任务")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -265,6 +428,16 @@ public class WorkerApi {
         }
     }
 
+    /**
+     * 更新任务状态接口
+     *
+     * <p>Worker更新任务执行状态和结果。
+     * 包含重试机制，处理数据库操作可能出现的并发问题。
+     *
+     * @param workerId Worker唯一标识符
+     * @param businessId 任务业务ID
+     * @param dto 任务状态更新参数
+     */
     @Retryable(
             value = {DeadlockLoserDataAccessException.class, CannotAcquireLockException.class},
             maxAttempts = 5,
@@ -272,7 +445,7 @@ public class WorkerApi {
             listeners = "retryListener"
     )
     @PatchMapping("{workerId}/tasks/{businessId}")
-    @Operation(summary = "更新任务接口", description = "更新任务接口")
+    @Operation(summary = "更新任务状态", description = "Worker更新任务执行状态和结果")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -280,8 +453,18 @@ public class WorkerApi {
         this.workerApplication.updateTaskInstance(workerId, businessId, dto.getStatus().name(), dto.getResultFile(), dto.getErrorMsg(), dto.getExitCode());
     }
 
+    /**
+     * 写入任务日志接口
+     *
+     * <p>Worker上传任务执行日志。
+     * 日志按行读取，每行包含时间戳、行号和内容。
+     *
+     * @param request HTTP请求对象
+     * @param workerId Worker唯一标识符
+     * @param businessId 任务业务ID
+     */
     @PostMapping("{workerId}/tasks/{businessId}/logs")
-    @Operation(summary = "写入任务日志接口", description = "写入任务日志接口")
+    @Operation(summary = "写入任务日志", description = "Worker上传任务执行日志")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -302,8 +485,18 @@ public class WorkerApi {
         }
     }
 
+    /**
+     * 批量写入任务日志接口
+     *
+     * <p>Worker实时上传任务执行日志。
+     * 与普通日志写入的区别是使用追加模式，支持实时流式写入。
+     *
+     * @param request HTTP请求对象
+     * @param workerId Worker唯一标识符
+     * @param businessId 任务业务ID
+     */
     @PostMapping("{workerId}/tasks/{businessId}/logs/batch")
-    @Operation(summary = "实时写入任务日志接口", description = "实时写入任务日志接口")
+    @Operation(summary = "批量写入任务日志", description = "Worker实时上传任务执行日志")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })
@@ -327,8 +520,17 @@ public class WorkerApi {
         }
     }
 
+    /**
+     * 获取K8s运行中任务
+     *
+     * <p>根据触发器ID获取Kubernetes中正在运行的任务。
+     *
+     * @param workerId Worker唯一标识符
+     * @param triggerId 触发器ID
+     * @return Unit 任务执行单元
+     */
     @GetMapping("/kubernetes/{workerId}/tasks/{triggerId}")
-    @Operation(summary = "获取k8s运行中任务", description = "获取k8s运行中任务")
+    @Operation(summary = "获取K8s运行中任务", description = "根据触发器ID获取K8s中正在运行的任务")
     @Parameters({
             @Parameter(name = "X-Jianmu-Token", in = ParameterIn.HEADER, description = "认证token")
     })

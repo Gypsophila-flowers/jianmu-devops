@@ -32,15 +32,24 @@
             />
           </jm-form-item>
         </div>
-        <div class="item">
+        <div class="item remember-row">
           <jm-checkbox v-model="loginForm.remember" @keyup.enter="login">
             <span class="label">{{ t('login.remember') }}</span>
           </jm-checkbox>
+          <a href="javascript:void(0)" class="forgot-password" @click="$emit('change-password')">
+            {{ t('login.forgotPassword') }}
+          </a>
         </div>
         <div class="btn">
           <jm-button type="primary" @click="login" :loading="loading">{{ t('login.login') }}</jm-button>
         </div>
       </jm-form>
+      
+      <!-- 注册入口 -->
+      <div class="register-link">
+        {{ t('login.noAccount') }}
+        <a href="javascript:void(0)" @click="$emit('switch-to-register')">{{ t('login.registerNow') }}</a>
+      </div>
     </div>
     <div v-else-if="authError" class="error-login">
       <div class="logo">
@@ -78,7 +87,7 @@ import { useLocale } from '@/utils/i18n';
 const { mapActions: mapSessionActions, mapMutations } = createNamespacedHelpers(namespace);
 
 export default defineComponent({
-  emits: ['logined', 'cancel'],
+  emits: ['logined', 'cancel', 'switch-to-register', 'change-password'],
   props: {
     code: String,
     error_description: String,
@@ -95,7 +104,6 @@ export default defineComponent({
     const router = useRouter();
     const route = useRoute();
     const store = useStore();
-    // 系统初始化后，自动决定登录方式（密码/第三方平台登录）
     const loginType = ref<string>(store.state.thirdPartyType);
     const Type = computed<string>(() => {
       switch (loginType.value) {
@@ -119,29 +127,26 @@ export default defineComponent({
       password: '',
       remember,
     });
-    // 是否oauth验证出错
     const authError = ref<boolean>(false);
-    // 获取三方登录授权地址
+    
     const fetchThirdAuthUrl = async () => {
       authError.value = false;
       localStorage.setItem('temp-login-mode', props.type);
-      // 弹框登录方式获取授权地址时显示登录中
       localStorage.getItem('temp-login-mode') !== 'index' && (loading.value = true);
       try {
         const { authorizationUrl } = await fetchAuthUrl({
           thirdPartyType: loginType.value,
           redirectUri: getRedirectUri(props.gitRepo, props.gitRepoOwner),
         });
-        // 登录模式（login页面登录/弹窗登录）
         window.open(authorizationUrl, localStorage.getItem('temp-login-mode') !== 'index' ? '_blank' : '_self');
       } catch (err) {
         proxy.$throw(err, proxy);
       }
     };
+    
     const refreshState = async (e: any) => {
       if (e.key === 'session') {
         const newSession = JSON.parse(e.newValue)['_default'].session;
-        // 如果session的token不为空,证明是刷新token导致的storage变化，不用提示登录成功[https://gitee.com/jianmu-dev/jianmu/issues/I6FI2D]
         if (store.state[namespace].session?.token) {
           loading.value = false;
           authError.value = false;
@@ -150,7 +155,6 @@ export default defineComponent({
           }, 500);
           return;
         }
-        // 登录成功
         loading.value = false;
         authError.value = false;
         proxy.$success(t('login.success'));
@@ -160,19 +164,16 @@ export default defineComponent({
         proxy.mutateSession(newSession);
       }
       if (e.key === 'temp-login-error-message') {
-        // 只有是弹窗登录授权失败才展示重新登录
         localStorage.getItem('temp-login-mode') !== 'index' && (authError.value = true);
-        // 登录失败
         loading.value = false;
       }
     };
+    
     onMounted(async () => {
       window.addEventListener('storage', refreshState);
-      // 判断是否为弹窗方式登录
       const dialogLogin = localStorage.getItem('temp-login-mode') !== 'index';
       if (props.error_description) {
         proxy.$error(props.error_description);
-        // dialogLogin ? proxy.$error(props.error_description + '，页面即将关闭') : proxy.$error(props.error_description);
         localStorage.setItem('temp-login-error-message', props.error_description);
         dialogLogin &&
           setTimeout(() => {
@@ -180,7 +181,6 @@ export default defineComponent({
           }, 2000);
         return;
       }
-      // 三方登录 有code码证明进行了授权验证，避免登录接口重复调用
       if (props.code) {
         loading.value = true;
         try {
@@ -210,9 +210,11 @@ export default defineComponent({
         await fetchThirdAuthUrl();
       }
     });
+    
     onBeforeUnmount(() => {
       window.onstorage = null;
     });
+    
     return {
       t,
       authError,
@@ -227,14 +229,11 @@ export default defineComponent({
         password: [{ required: true, message: t('login.passwordEmpty'), trigger: 'blur' }],
       }),
       login: () => {
-        // 开启loading
         loading.value = true;
 
         loginFormRef.value.validate(async (valid: boolean) => {
           if (!valid) {
-            // 关闭loading
             loading.value = false;
-
             return false;
           }
           try {
@@ -246,7 +245,6 @@ export default defineComponent({
           } catch (err) {
             proxy.$throw(err, proxy);
           } finally {
-            // 关闭loading
             loading.value = false;
             emit('logined');
           }
@@ -294,6 +292,22 @@ export default defineComponent({
       font-weight: 400;
       color: #6b7b8d;
     }
+
+    &.remember-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .forgot-password {
+        color: #096dd9;
+        font-size: 13px;
+        text-decoration: none;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
   }
 
   .btn {
@@ -306,6 +320,23 @@ export default defineComponent({
 
     .el-button--primary {
       box-shadow: none;
+    }
+  }
+
+  .register-link {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: #6b7b8d;
+
+    a {
+      color: #096dd9;
+      text-decoration: none;
+      margin-left: 5px;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
   }
 

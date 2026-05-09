@@ -1,3 +1,17 @@
+/**
+ * 工作流图形渲染模块
+ * 
+ * 该模块负责将JSON格式的工作流DSL数据渲染为可视化的图形界面。
+ * 主要功能包括：
+ * - 异步渲染大量节点和边的优化
+ * - 画布缩放、平移、框选等交互支持
+ * - 节点和边的创建、连接、复制粘贴等操作
+ * - 连接桩（Port）的显示与隐藏控制
+ * - 环路检测，防止创建循环连线
+ * 
+ * 使用AntV X6图形引擎作为底层渲染库
+ */
+
 import { Cell, Edge, Graph, Node, Shape } from '@antv/x6';
 import normalizeWheel from 'normalize-wheel';
 import { WorkflowTool } from './workflow-tool';
@@ -7,6 +21,20 @@ import { EDGE, NODE, PORT, PORTS } from '../shape/gengral-config';
 import { WorkflowEdgeToolbar } from './workflow-edge-toolbar';
 import { CustomX6NodeProxy } from './data/custom-x6-node-proxy';
 
+/**
+ * 工作流图形数据渲染函数
+ * 
+ * @param graph - X6图形实例，用于操作画布中的节点和边
+ * @param data - JSON格式的工作流DSL数据，包含cells数组描述所有节点和边
+ * @param workflowTool - 工作流工具类实例，用于控制画布缩放等操作
+ * 
+ * 该函数执行以下操作：
+ * 1. 启用异步渲染模式，提升大量节点渲染时的性能
+ * 2. 冻结画布以批量添加节点
+ * 3. 解析DSL数据并创建对应的节点和边
+ * 4. 解冻画布并触发重绘
+ * 5. 渲染完成后将画布居中显示
+ */
 const { icon: { width, height } } = NODE;
 const { stroke: lineColor } = EDGE;
 const { fill: circleBgColor } = PORT;
@@ -49,45 +77,101 @@ export function render(graph: Graph, data: string, workflowTool: WorkflowTool) {
   graph.unfreeze();
 }
 
+/**
+ * WorkflowGraph 类 - 工作流图形管理核心类
+ * 
+ * 负责管理工作流的图形化编辑，包括：
+ * - 画布初始化和配置
+ * - 节点和边的交互管理
+ * - 快捷键绑定（复制、粘贴、全选等）
+ * - 连接桩（Port）的可视化控制
+ * - 容器尺寸变化的响应式处理
+ */
 export class WorkflowGraph {
+  /**
+   * X6图形实例，底层渲染引擎
+   */
   private readonly graph: Graph;
+  
+  /**
+   * 点击节点时的回调函数，用于通知父组件哪个节点被选中
+   */
   private readonly clickNodeCallback: (nodeId: string) => void;
+  
+  /**
+   * 工作流工具类实例，提供缩放、适应画布等功能
+   */
   private readonly workflowTool: WorkflowTool;
+  
+  /**
+   * 节点工具栏实例，在节点上方显示操作按钮（编辑、删除等）
+   */
   readonly workflowNodeToolbar: WorkflowNodeToolbar;
+  
+  /**
+   * 边工具栏实例，在连线上显示删除按钮
+   */
   private readonly workflowEdgeToolbar: WorkflowEdgeToolbar;
+  
+  /**
+   * 容器尺寸变化监听器，用于响应式调整画布大小
+   */
   private readonly resizeObserver: ResizeObserver;
 
+  /**
+   * WorkflowGraph 构造函数
+   * 
+   * 初始化工作流图形编辑器，包括：
+   * - 创建X6图形实例并配置各项功能
+   * - 初始化节点和边的工具栏
+   * - 绑定快捷键和事件监听器
+   * - 设置容器尺寸变化监听
+   * 
+   * @param proxy - Vue组件代理实例，用于调用$message等全局方法
+   * @param container - 图形容器的DOM元素
+   * @param clickNodeCallback - 节点点击回调函数
+   */
   constructor(proxy: any, container: HTMLElement, clickNodeCallback: (nodeId: string) => void) {
+    // 获取容器父元素的尺寸，用于初始化画布大小
     const containerParentEl = container.parentElement!;
     const { clientWidth: width, clientHeight: height } = containerParentEl;
     this.clickNodeCallback = clickNodeCallback;
 
     // #region 初始化画布
+    // 创建X6图形实例，配置画布的各项功能
     this.graph = new Graph({
       container,
       width,
       height,
-      // 不绘制网格背景
+      // 不绘制网格背景，保持界面简洁
       grid: false,
+      
+      // 连线配置
       connecting: {
-        // 通过高亮+允许多边机制，实现修改边的起点或终点时，确定可连接的连接桩
+        // 启用高亮显示可连接的目标节点
         highlight: true,
+        // 允许多边连接（同一起点和终点可以有多条边）
         allowMulti: true,
+        // 连接点位置为中心点
         anchor: 'center',
+        // 使用锚点作为连接点
         connectionPoint: 'anchor',
+        
+        // 禁止连接到画布空白位置
         allowBlank: () => {
-          // 隐藏所有连接桩
+          // 连接时隐藏所有连接桩
           this.hideAllPorts();
-
-          // 禁止连接到画布空白位置的点
           return false;
         },
-        // 禁止创建循环连线，即边的起始节点和终止节点为同一节点
+        
+        // 禁止创建循环连线（边的起始和终止节点不能相同）
         allowLoop: false,
-        // 禁止边链接到节点（非节点上的链接桩）
+        // 禁止边直接链接到节点（必须连接到连接桩）
         allowNode: false,
         // 禁止边链接到另一个边
         allowEdge: false,
+        
+        // 自动吸附配置，半径20像素内的连接桩会自动吸附
         snap: {
           radius: 20,
         },

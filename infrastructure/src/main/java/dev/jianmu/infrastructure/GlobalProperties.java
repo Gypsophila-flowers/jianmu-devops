@@ -1,93 +1,87 @@
 package dev.jianmu.infrastructure;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-import org.springframework.validation.annotation.Validated;
 
 /**
- * @author Ethan Liu
- * @class GlobalProperties
- * @description 全局配置
- * @create 2022-01-04 08:48
+ * GlobalProperties - 全局配置属性类
+ *
+ * <p>该类用于加载和访问application.yml中的全局配置项。
+ * 通过@ConfigurationProperties注解，将配置文件中的属性绑定到Java对象中。
+ *
+ * <p>配置项说明：
+ * <ul>
+ *   <li>jianmu.api.base-uri - API基础URI，用于构建完整的API地址</li>
+ *   <li>jianmu.workspace.base-dir - 工作空间根目录，存储任务执行的工作文件</li>
+ *   <li>jianmu.volume.mount-path - 存储卷挂载路径</li>
+ * </ul>
+ *
+ * <p>使用方式：
+ * <pre>{@code
+ * @Autowired
+ * private GlobalProperties globalProperties;
+ *
+ * public void doSomething() {
+ *     String baseUri = globalProperties.getApi().getBaseUri();
+ * }
+ * }</pre>
+ *
+ * @author Daihw
  */
 @Data
 @Component
-@Validated
 @ConfigurationProperties(prefix = "jianmu")
 public class GlobalProperties {
-    @NotNull
-    private Global global = new Global();
-    private String authMode = "readonly";
-    private Worker worker = new Worker();
-    private TriggerQueue triggerQueue = new TriggerQueue();
 
+    /**
+     * API配置
+     */
+    private Api api = new Api();
+
+    /**
+     * 工作空间配置
+     */
+    private Workspace workspace = new Workspace();
+
+    /**
+     * 存储卷配置
+     */
+    private Volume volume = new Volume();
+
+    /**
+     * API配置类
+     */
     @Data
-    @Component
-    @Validated
-    public class Global {
-        @NotNull
-        private Record record = new Record();
-
-        @Data
-        @Component
-        @Validated
-        public class Record {
-            @NotNull
-            private Long max = 9999L;
-            @NotNull
-            private Boolean autoClean = false;
-        }
+    public static class Api {
+        /**
+         * API基础URI
+         * 用于构建完整的API地址链接
+         */
+        private String baseUri;
     }
 
+    /**
+     * 工作空间配置类
+     */
     @Data
-    @Component
-    @Validated
-    public static class Worker {
-        @NotBlank
-        private String secret;
-        private Registry registry = new Registry();
-        private K8s k8s = new K8s();
-        private Container container = new Container();
-        // IfNotPresent, Always and Never
-        private String imagePullPolicy = "IfNotPresent";
-
-        @Data
-        @Component
-        @Validated
-        public class Registry{
-            private String address;
-            private String username;
-            private String password;
-        }
-
-        @Data
-        @Component
-        @Validated
-        public static class K8s {
-            private String namespace = "jianmu";
-            private String placeholder = "docker.jianmuhub.com/jianmu/placeholder:0.3";
-            private String keepalive = "docker.jianmuhub.com/library/alpine:3.17.2";
-        }
-
-        @Data
-        @Component
-        @Validated
-        public static class Container {
-            private String[] extraHosts;
-        }
+    public static class Workspace {
+        /**
+         * 工作空间根目录
+         * 任务执行时的工作文件会存储在此目录下
+         */
+        private String baseDir;
     }
 
-    @NotNull
-    public Boolean trace = true;
-
+    /**
+     * 存储卷配置类
+     */
     @Data
-    @Component
-    @Validated
-    public static class TriggerQueue {
-        @NotNull
-        public Integer max = 5;
+    public static class Volume {
+        /**
+         * 存储卷挂载路径
+         * 用于在Worker中挂载持久化存储
+         */
+        private String mountPath;
     }
 }

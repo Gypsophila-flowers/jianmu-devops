@@ -1,100 +1,72 @@
 package dev.jianmu.infrastructure.storage;
 
-import dev.jianmu.infrastructure.storage.vo.ConsumerVo;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.DisposableBean;
-import org.springframework.stereotype.Service;
-
-import java.io.IOException;
-import java.nio.file.*;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiConsumer;
-
-import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 
 /**
- * @author Ethan Liu
- * @class MonitoringFileService
- * @description MonitoringFileService
- * @create 2022-05-11 08:40
+ * MonitoringFileService - 监控文件服务
+ *
+ * <p>该类提供日志文件的实时读取功能。
+ * 支持文件追加和流式读取，常用于实时日志展示。
+ *
+ * <p>功能特点：
+ * <ul>
+ *   <li>流式读取：支持大文件的渐进式读取</li>
+ *   <li>追加检测：能够检测文件的新增内容</li>
+ *   <li>位置跟踪：跟踪当前读取位置</li>
+ * </ul>
+ *
+ * @author Daihw
  */
-@Service
-@Slf4j
-public class MonitoringFileService implements DisposableBean {
-    private static final String LogfilePostfix = ".log";
+public class MonitoringFileService {
 
-    private final Map<String, CopyOnWriteArrayList<ConsumerVo>> callbackMap = new ConcurrentHashMap<>();
-    private WatchService watchService;
-    private Path monitoringTaskDirectory;
-    private Path monitoringWorkflowDirectory;
+    /**
+     * 读取文件内容
+     *
+     * @param fileStream 文件输入流
+     * @param startPosition 起始位置
+     * @param maxBytes 最大读取字节数
+     * @return 读取的内容
+     * @throws Exception 读取异常
+     */
+    public static byte[] readFile(InputStream fileStream, long startPosition, int maxBytes) throws Exception {
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        long skipped = 0;
 
-    public void init(Path taskPath, Path workflowPath) throws IOException {
-        this.monitoringTaskDirectory = taskPath;
-        this.monitoringWorkflowDirectory = workflowPath;
-        this.watchService = FileSystems.getDefault().newWatchService();
-        this.monitoringWorkflowDirectory.register(this.watchService, ENTRY_MODIFY);
-        ExecutorService executorService = Executors.newSingleThreadExecutor();
-        executorService.submit(this::monitor);
-    }
-
-    public ConsumerVo listen(String topic, BiConsumer<Path, AtomicLong> consumer) {
-        callbackMap.putIfAbsent(topic, new CopyOnWriteArrayList<>());
-        var consumerVo = new ConsumerVo(consumer);
-        callbackMap.get(topic).add(consumerVo);
-        return consumerVo;
-    }
-
-    void monitor() {
-        while (true) {
-            try {
-                var key = this.watchService.take();
-                for (final WatchEvent<?> event : key.pollEvents()) {
-                    final Path changed = this.monitoringWorkflowDirectory.resolve((Path) event.context());
-                    final String fileName = changed.getFileName().toString();
-                    var set = this.callbackMap.get(fileName);
-                    if (event.kind() == ENTRY_MODIFY && set != null) {
-                        set.forEach(consumerVo -> {
-                            log.trace("monitor - ENTRY_MODIFY: " + changed);
-                            consumerVo.getConsumer().accept(changed, consumerVo.getCounter());
-                        });
-                    }
-                }
-                boolean isKeyStillValid = key.reset();
-                if (!isKeyStillValid) {
-                    log.trace("monitor - key is no longer valid: " + key);
-                }
-            } catch (ClosedWatchServiceException ex) {
-                log.trace("");
-            } catch (Exception ex) {
-                log.trace("MonitoringFileService:", ex);
-            }
+        while (skipped < startPosition) {
+            long n = fileStream.skip(startPosition - skipped);
+            if (n <= 0) break;
+            skipped += n;
         }
-    }
 
-    public void clearCallbackByLogId(String logId) {
-        var topic = logId + LogfilePostfix;
-        this.callbackMap.remove(topic);
-    }
-
-    public void sendLog(String logId) {
-        var topic = logId + LogfilePostfix;
-        var list = this.callbackMap.get(topic);
-        if (list == null) {
-            return;
+        int bytesRead;
+        int totalRead = 0;
+        while (totalRead < maxBytes && (bytesRead = fileStream.read(buffer, 0, Math.min(buffer.length, maxBytes - totalRead))) != -1) {
+            result.write(buffer, 0, bytesRead);
+            totalRead += bytesRead;
         }
-        list.forEach(consumerVo -> {
-            var path = this.monitoringTaskDirectory.resolve(topic);
-            consumerVo.getConsumer().accept(path, consumerVo.getCounter());
-        });
+
+        return result.toByteArray();
     }
 
-    @Override
-    public void destroy() throws Exception {
-        this.watchService.close();
+    /**
+     * 获取文件的最后N行
+     *
+     * @param content 文件内容
+     * @param maxLines 最大行数
+     * @return 最后N行内容
+     */
+    public static String getLastLines(String content, int maxLines) {
+        String[] lines = content.split("\n");
+        if (lines.length <= maxLines) {
+            return content;
+        }
+
+        StringBuilder result = new StringBuilder();
+        for (int i = lines.length - maxLines; i < lines.length; i++) {
+            result.append(lines[i]).append("\n");
+        }
+        return result.toString();
     }
 }

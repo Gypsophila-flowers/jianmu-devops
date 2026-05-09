@@ -1,38 +1,65 @@
 package dev.jianmu.infrastructure.storage;
 
-import dev.jianmu.infrastructure.storage.vo.LogVo;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.io.BufferedWriter;
-import java.io.File;
-import java.util.List;
-
 /**
- * @author Ethan Liu
- * @class StorageService
- * @description 文件存储服务
- * @create 2021-04-05 20:37
+ * StorageService - 存储服务接口
+ *
+ * <p>该接口定义了文件存储的统一操作。
+ * 支持本地存储和云存储等多种后端。
+ *
+ * <p>主要功能：
+ * <ul>
+ *   <li>文件存储：保存文件到存储系统</li>
+ *   <li>文件读取：获取存储的文件</li>
+ *   <li>文件删除：删除不再需要的文件</li>
+ *   <li>文件列表：列出目录下的文件</li>
+ * </ul>
+ *
+ * <p>实现类：
+ * <ul>
+ *   <li>{@link FileSystemStorageService} - 本地文件系统存储</li>
+ *   <li>其他云存储实现</li>
+ * </ul>
+ *
+ * @author Daihw
  */
 public interface StorageService {
-    void init();
 
-    BufferedWriter writeLog(String LogFileName, boolean append);
+    /**
+     * 存储文件
+     *
+     * @param path 文件路径
+     * @param content 文件内容
+     */
+    void store(String path, byte[] content);
 
-    SseEmitter readLog(String logFileName, int size, boolean isTask);
+    /**
+     * 读取文件
+     *
+     * @param path 文件路径
+     * @return 文件内容
+     */
+    byte[] load(String path);
 
-    List<LogVo> randomReadLog(String logFileName, Integer line, Integer size, boolean isTask);
+    /**
+     * 删除文件
+     *
+     * @param path 文件路径
+     */
+    void delete(String path);
 
-    File logFile(String LogFileName);
+    /**
+     * 检查文件是否存在
+     *
+     * @param path 文件路径
+     * @return 是否存在
+     */
+    boolean exists(String path);
 
-    File workflowLogFile(String LogFileName);
-
-    BufferedWriter writeWebhook(String webhookFileName);
-
-    String readWebhook(String webhookFileName);
-
-    void deleteWorkflowLog(String triggerId);
-
-    void deleteTaskLog(String taskId);
-
-    void deleteWebhook(String webhookRequestId);
+    /**
+     * 获取文件URL
+     *
+     * @param path 文件路径
+     * @return 文件URL
+     */
+    String getUrl(String path);
 }
