@@ -168,10 +168,11 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public List<Namespace> findAllNamespace() {
         List<Namespace> result = new ArrayList<>();
-        VaultResponse response = vaultTemplate.list(SECRET_PATH_PREFIX);
+        // 使用VaultOperations的list方法返回List<String>
+        List<String> namespaces = vaultTemplate.opsForList().list(SECRET_PATH_PREFIX);
 
-        if (response != null && response.getListData() != null) {
-            for (String name : response.getListData()) {
+        if (namespaces != null) {
+            for (String name : namespaces) {
                 result.add(Namespace.Builder.aNamespace().name(name).build());
             }
         }
