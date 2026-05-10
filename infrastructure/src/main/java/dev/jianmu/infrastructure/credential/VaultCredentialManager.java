@@ -3,10 +3,14 @@ package dev.jianmu.infrastructure.credential;
 import dev.jianmu.secret.aggregate.CredentialManager;
 import dev.jianmu.secret.aggregate.KVPair;
 import dev.jianmu.secret.aggregate.Namespace;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.vault.core.VaultOperations;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.vault.support.VaultResponse;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,10 +42,10 @@ import java.util.Optional;
 public class VaultCredentialManager implements CredentialManager {
 
     /**
-     * Vault模板
+     * Vault操作接口
      * 用于与Vault服务器交互
      */
-    private final VaultTemplate vaultTemplate;
+    private final VaultOperations vaultOperations;
 
     /**
      * Vault路径前缀
@@ -52,10 +56,11 @@ public class VaultCredentialManager implements CredentialManager {
     /**
      * 构造函数
      *
-     * @param vaultConfig Vault配置
+     * @param vaultTemplate Spring注入的VaultTemplate实例
      */
-    public VaultCredentialManager(VaultConfig vaultConfig) {
-        this.vaultTemplate = new VaultTemplate();
+    @Autowired
+    public VaultCredentialManager(VaultTemplate vaultTemplate) {
+        this.vaultOperations = vaultTemplate;
     }
 
     /**
@@ -78,7 +83,9 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public void createNamespace(Namespace namespace) {
         String path = SECRET_PATH_PREFIX + namespace.getName();
-        vaultTemplate.write(path, Map.of("initialized", "true"));
+        Map<String, Object> data = new HashMap<>();
+        data.put("initialized", "true");
+        vaultOperations.write(path, data);
     }
 
     /**
@@ -91,7 +98,7 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public void deleteNamespace(String name) {
         String path = SECRET_PATH_PREFIX + name;
-        vaultTemplate.delete(path);
+        vaultOperations.delete(path);
     }
 
     /**
@@ -103,8 +110,10 @@ public class VaultCredentialManager implements CredentialManager {
      */
     @Override
     public void createKVPair(KVPair kvPair) {
-        String path = SECRET_PATH_PREFIX + kvPair.getNamespaceName();
-        vaultTemplate.write(path + "/" + kvPair.getKey(), Map.of("value", kvPair.getValue()));
+        String path = SECRET_PATH_PREFIX + kvPair.getNamespaceName() + "/" + kvPair.getKey();
+        Map<String, Object> data = new HashMap<>();
+        data.put("value", kvPair.getValue());
+        vaultOperations.write(path, data);
     }
 
     /**
@@ -116,7 +125,7 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public void deleteKVPair(String namespaceName, String key) {
         String path = SECRET_PATH_PREFIX + namespaceName + "/" + key;
-        vaultTemplate.delete(path);
+        vaultOperations.delete(path);
     }
 
     /**
@@ -128,7 +137,7 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public Optional<Namespace> findNamespaceByName(String name) {
         String path = SECRET_PATH_PREFIX + name;
-        VaultResponse response = vaultTemplate.read(path);
+        VaultResponse response = vaultOperations.read(path);
         if (response != null) {
             return Optional.of(Namespace.Builder.aNamespace().name(name).build());
         }
@@ -144,7 +153,7 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public List<KVPair> findAllKVByNamespaceName(String namespaceName) {
         String path = SECRET_PATH_PREFIX + namespaceName;
-        VaultResponse response = vaultTemplate.read(path);
+        VaultResponse response = vaultOperations.read(path);
         List<KVPair> result = new ArrayList<>();
 
         if (response != null && response.getData() != null) {
@@ -169,7 +178,7 @@ public class VaultCredentialManager implements CredentialManager {
     public List<Namespace> findAllNamespace() {
         List<Namespace> result = new ArrayList<>();
         // 使用VaultOperations的list方法返回List<String>
-        List<String> namespaces = vaultTemplate.opsForList().list(SECRET_PATH_PREFIX);
+        List<String> namespaces = vaultOperations.list(SECRET_PATH_PREFIX);
 
         if (namespaces != null) {
             for (String name : namespaces) {
@@ -190,7 +199,7 @@ public class VaultCredentialManager implements CredentialManager {
     @Override
     public Optional<KVPair> findByNamespaceNameAndKey(String namespaceName, String key) {
         String path = SECRET_PATH_PREFIX + namespaceName + "/" + key;
-        VaultResponse response = vaultTemplate.read(path);
+        VaultResponse response = vaultOperations.read(path);
 
         if (response != null && response.getData() != null) {
             Object value = response.getData().get("value");
