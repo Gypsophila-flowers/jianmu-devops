@@ -52,10 +52,10 @@ public class VaultCredentialManager implements CredentialManager {
     /**
      * 构造函数
      *
-     * @param vaultTemplate Spring注入的VaultTemplate实例
+     * @param vaultConfig Vault配置
      */
-    public VaultCredentialManager(VaultTemplate vaultTemplate) {
-        this.vaultTemplate = vaultTemplate;
+    public VaultCredentialManager(VaultConfig vaultConfig) {
+        this.vaultTemplate = new VaultTemplate();
     }
 
     /**
