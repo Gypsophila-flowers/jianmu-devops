@@ -103,7 +103,8 @@
 
 <script lang="ts">
 import { defineComponent, getCurrentInstance, onMounted, ref, computed } from 'vue';
-import { fetchUsers, fetchUserRoles, assignUserRoles, fetchUserPermissions, fetchRoles } from '@/api/permission';
+import { fetchUserRoles, assignUserRoles, fetchUserPermissions, fetchRoles } from '@/api/permission';
+import { fetchUsers } from '@/api/user';
 import { ElMessage } from 'element-plus';
 import { useLocale } from '@/utils/i18n';
 

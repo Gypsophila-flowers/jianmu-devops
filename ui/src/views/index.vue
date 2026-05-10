@@ -47,6 +47,18 @@
               <span class="text">{{ $t('index.secretKeyManager') }}</span>
             </div>
           </router-link>
+          <router-link :to="{ name: 'role-manager' }">
+            <div class="btn-item">
+              <button class="role-manager"></button>
+              <span class="text">{{ $t('index.roleManager') }}</span>
+            </div>
+          </router-link>
+          <router-link :to="{ name: 'user-permission' }">
+            <div class="btn-item">
+              <button class="user-permission"></button>
+              <span class="text">{{ $t('index.userPermissionManager') }}</span>
+            </div>
+          </router-link>
         </div>
       </div>
       <!-- 全部项目 -->

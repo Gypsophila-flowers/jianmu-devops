@@ -119,4 +119,20 @@ export default [
       title: '编辑项目',
     },
   },
+  {
+    name: 'role-manager',
+    path: 'permission/roles',
+    component: () => import('@/views/permission/role-manager.vue'),
+    meta: {
+      title: t('breadcrumb.roleManager'),
+    },
+  },
+  {
+    name: 'user-permission',
+    path: 'permission/users',
+    component: () => import('@/views/permission/user-permission-manager.vue'),
+    meta: {
+      title: t('breadcrumb.userPermissionManager'),
+    },
+  },
 ] as RouteRecordRaw[];
