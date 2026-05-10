@@ -1,6 +1,12 @@
 package dev.jianmu.infrastructure.credential;
 
-import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.vault.client.VaultEndpoint;
+import org.springframework.vault.config.AbstractVaultConfiguration;
+import org.springframework.vault.core.VaultTemplate;
 
 /**
  * VaultConfig - Vault配置类
@@ -15,10 +21,13 @@ import org.springframework.stereotype.Component;
  *   <li>支持命名空间隔离</li>
  * </ul>
  *
+ * 注意：此类仅在配置 credential.type=vault 时才会被加载
+ *
  * @author Daihw
  */
-@Component
-public class VaultConfig {
+@Configuration
+@ConditionalOnProperty(name = "jianmu.credential.type", havingValue = "vault")
+public class VaultConfig extends AbstractVaultConfiguration {
 
     /**
      * Vault属性
@@ -30,34 +39,48 @@ public class VaultConfig {
      *
      * @param credentialProperties 凭证配置属性
      */
+    @Autowired
     public VaultConfig(CredentialProperties credentialProperties) {
         this.credentialProperties = credentialProperties;
     }
 
     /**
-     * 获取Vault URI
+     * 获取Vault端点
      *
-     * @return Vault服务器地址
+     * @return Vault服务器端点
      */
-    public String getVaultUri() {
-        return credentialProperties.getVault().getUri();
+    @Override
+    public VaultEndpoint vaultEndpoint() {
+        String uri = credentialProperties.getVault().getUri();
+        if (uri != null && !uri.isEmpty()) {
+            return VaultEndpoint.from(uri);
+        }
+        // 默认使用本地Vault地址
+        return VaultEndpoint.from("http://127.0.0.1:8200");
     }
 
     /**
-     * 获取Vault Token
+     * 获取客户端配置
      *
-     * @return Vault访问令牌
+     * @return 客户端配置
      */
-    public String getVaultToken() {
-        return credentialProperties.getVault().getToken();
+    @Override
+    public ClientCredentials clientCredentials() {
+        String token = credentialProperties.getVault().getToken();
+        if (token != null && !token.isEmpty()) {
+            return new ClientCredentials(token);
+        }
+        // 如果没有配置token，返回空凭证
+        return new ClientCredentials("");
     }
 
     /**
-     * 获取Vault命名空间
+     * 创建VaultTemplate Bean
      *
-     * @return Vault命名空间
+     * @return VaultTemplate实例
      */
-    public String getVaultNamespace() {
-        return credentialProperties.getVault().getNamespace();
+    @Bean
+    public VaultTemplate vaultTemplate() {
+        return new VaultTemplate(client(), clientOptions());
     }
 }

@@ -4,6 +4,7 @@ import dev.jianmu.secret.aggregate.CredentialManager;
 import dev.jianmu.secret.aggregate.KVPair;
 import dev.jianmu.secret.aggregate.Namespace;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.vault.core.VaultOperations;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.vault.support.VaultResponse;
@@ -35,10 +36,13 @@ import java.util.Optional;
  *   <li>每个键值对存储在该路径下的键下</li>
  * </ul>
  *
+ * 注意：此类仅在配置 credential.type=vault 时才会被加载
+ *
  * @author Daihw
  * @see CredentialManager
  */
 @Component
+@ConditionalOnProperty(name = "jianmu.credential.type", havingValue = "vault")
 public class VaultCredentialManager implements CredentialManager {
 
     /**
